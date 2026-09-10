@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image HD Upscaler & Enhancer (ONNX Web)</title>
+    <!-- Microsoft ONNX Runtime Web CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1f4068 0%, #162447 50%, #1a1a2e 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .glass-container {
+            background: rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 750px;
+            padding: 40px;
+            text-align: center;
+        }
+        h2 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00dbde, #fc00ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        p {
+            color: #cbd5e1;
+            font-size: 15px;
+            margin-bottom: 25px;
+        }
+        .btn {
+            background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 114, 255, 0.4);
+            margin: 10px 0;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 114, 255, 0.6);
+        }
+        .btn:disabled {
+            background: rgba(255, 255, 255, 0.2);
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+        #progressContainer {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin: 20px 0;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: none;
+        }
+        #progressBar {
+            width: 0%;
+            height: 24px;
+            background: linear-gradient(90deg, #00dbde, #fc00ff);
+            text-align: center;
+            color: white;
+            font-weight: bold;
+            font-size: 13px;
+            line-height: 24px;
+            transition: width 0.1s ease;
+        }
+        #status {
+            font-weight: 500;
+            margin: 15px 0;
+            font-size: 15px;
+            color: #38ef7d;
+        }
+        .upload-section {
+            margin-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            padding-top: 25px;
+            display: none;
+        }
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        .file-input-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .custom-file-btn {
+            display: block;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            padding: 20px;
+            border-radius: 12px;
+            color: #fff;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .custom-file-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        .preview-grid {
+            display: flex;
+            justify-content: space-around;
+            gap: 15px;
+            margin-top: 25px;
+            flex-wrap: wrap;
+        }
+        .preview-box {
+            flex: 1;
+            min-width: 280px;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .preview-box h4 {
+            margin-bottom: 10px;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+        canvas, img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="glass-container">
+        <h2>💎 AI Image HD Upscaler</h2>
+        <p>মাইক্রোসফট ONNX প্রযুক্তিতে ব্রাউজারে ছবি হাই-ডেফিনেশন ও শার্প করুন</p>
+
+        <!-- Model Download Section -->
+        <div id="modelSection">
+            <button id="downloadBtn" class="btn" onclick="loadSuperResolutionModel()">⚡ এআই মডেল ডাউনলোড ও স্টার্ট করুন</button>
+            <div id="progressContainer">
+                <div id="progressBar">0%</div>
+            </div>
+        </div>
+
+        <div id="status">স্ট্যাটাস: মডেল ডাউনলোড করা হয়নি।</div>
+
+        <!-- Upload & Enhancement Section -->
+        <div class="upload-section" id="uploadSection">
+            <div class="file-input-wrapper">
+                <button class="custom-file-btn">📁 যেকোনো ঘোলা বা সাধারণ ছবি এখানে সিলেক্ট করুন</button>
+                <input type="file" id="imageInput" accept="image/*">
+            </div>
+
+            <div class="preview-grid" id="previewGrid" style="display: none;">
+                <div class="preview-box">
+                    <h4>মূল ছবি (Original)</h4>
+                    <img id="originalPreview" alt="Original">
+                </div>
+                <div class="preview-box">
+                    <h4>এআই এইচডি আউটপุต (Enhanced HD)</h4>
+                    <canvas id="outputCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let session = null;
+        const statusDiv = document.getElementById('status');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const uploadSection = document.getElementById('uploadSection');
+        const imageInput = document.getElementById('imageInput');
+        const previewGrid = document.getElementById('previewGrid');
+        const originalPreview = document.getElementById('originalPreview');
+        const outputCanvas = document.getElementById('outputCanvas');
+
+        // Super-Resolution ONNX Model URL from Hugging Face
+        const MODEL_URL = "https://huggingface.co/onnxmodelzoo/super-resolution-10/resolve/main/super_resolution.onnx";
+
+        async function loadSuperResolutionModel() {
+            downloadBtn.disabled = true;
+            progressContainer.style.display = "block";
+            statusDiv.innerHTML = "মডেল ডাউনলোড শুরু হচ্ছে... <span class='loading-spinner'></span>";
+
+            try {
+                const response = await fetch(MODEL_URL);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+                const totalBytes = parseInt(response.headers.get('content-length'), 10);
+                let loadedBytes = 0;
+                const reader = response.body.getReader();
+                let chunks = [];
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    chunks.push(value);
+                    loadedBytes += value.length;
+
+                    if (totalBytes) {
+                        let percent = Math.round((loadedBytes / totalBytes) * 100);
+                        progressBar.style.width = percent + "%";
+                        progressBar.innerText = percent + "%";
+                        statusDiv.innerHTML = `ডাউনলোড হচ্ছে: ${(loadedBytes / (1024*1024)).toFixed(2)} MB / ${(totalBytes / (1024*1024)).toFixed(2)} MB <span class='loading-spinner'></span>`;
+                    }
+                }
+
+                statusDiv.innerHTML = "মডেল মেমরিতে ইনিশিয়ালাইজ করা হচ্ছে... <span class='loading-spinner'></span>";
+
+                let blob = new Blob(chunks);
+                let arrayBuffer = await blob.arrayBuffer();
+
+                // Create ONNX Inference Session
+                session = await ort.InferenceSession.create(arrayBuffer);
+
+                statusDiv.innerHTML = "✨ মডেল সফলভাবে লোড হয়েছে! এখন যেকোনো ছবি এইচডি করুন।";
+                downloadBtn.style.display = "none";
+                progressContainer.style.display = "none";
+                uploadSection.style.display = "block";
+
+            } catch (error) {
+                console.error(error);
+                statusDiv.innerHTML = "❌ মডেল লোড করতে সমস্যা হয়েছে। নেটওয়ার্ক বা CORS পলিসি চেক করুন।";
+                downloadBtn.disabled = false;
+            }
+        }
+
+        imageInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file || !session) return;
+
+            const imageUrl = URL.createObjectURL(file);
+            originalPreview.src = imageUrl;
+            previewGrid.style.display = "flex";
+            statusDiv.innerHTML = "ফটো এআই দিয়ে শার্প ও এইচডি করা হচ্ছে... <span class='loading-spinner'></span>";
+
+            const img = new Image();
+            img.src = imageUrl;
+            img.onload = async () => {
+                try {
+                    await enhanceImage(img);
+                    statusDiv.innerHTML = "✅ ছবি সফলভাবে হাই-ডেফিনেশন (HD) করা হয়েছে!";
+                } catch (err) {
+                    console.error(err);
+                    statusDiv.innerHTML = "❌ ছবি প্রসেস করার সময় ত্রুটি ঘটেছে।";
+                }
+            };
+        });
+
+        async function enhanceImage(img) {
+            const width = 224;
+            const height = 224;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const imgData = ctx.getImageData(0, 0, width, height);
+            const inputTensor = preprocessImage(imgData, width, height);
+
+            const feeds = { [session.inputNames[0]]: inputTensor };
+            const results = await session.run(feeds);
+            const outputTensor = results[session.outputNames[0]];
+
+            const scale = 3;
+            const outWidth = width * scale;
+            const outHeight = height * scale;
+
+            outputCanvas.width = outWidth;
+            outputCanvas.height = outHeight;
+            const outCtx = outputCanvas.getContext('2d');
+            
+            renderOutputToCanvas(outputTensor.data, outWidth, outHeight, outCtx);
+        }
+
+        function preprocessImage(imgData, width, height) {
+            const { data } = imgData;
+            const inputFloat = new Float32Array(width * height);
+
+            for (let i = 0; i < width * height; i++) {
+                const r = data[i * 4];
+                const g = data[i * 4 + 1];
+                const b = data[i * 4 + 2];
+                const y = 0.299 * r + 0.587 * g + 0.114 * b;
+                inputFloat[i] = y / 255.0;
+            }
+            return new ort.Tensor('float32', inputFloat, [1, 1, height, width]);
+        }
+
+        function renderOutputToCanvas(outputData, width, height, ctx) {
+            const imgData = ctx.createImageData(width, height);
+            const data = imgData.data;
+
+            for (let i = 0; i < width * height; i++) {
+                let val = Math.min(Math.max(outputData[i] * 255.0, 0), 255);
+                data[i * 4]     = val;
+                data[i * 4 + 1] = val;
+                data[i * 4 + 2] = val;
+                data[i * 4 + 3] = 255;
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+    </script>
+
+</body>
+</html>
